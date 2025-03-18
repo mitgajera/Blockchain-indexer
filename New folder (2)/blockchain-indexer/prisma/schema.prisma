@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                Int             @id @default(autoincrement())
+  email             String          @unique
+  password          String
+  name              String?
+  role              String          @default("user")
+  verified          Boolean         @default(false)
+  verificationToken String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  mfaEnabled        Boolean         @default(false)
+  mfaMethod         String?
+  mfaSecret         String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  dbConnections     DbConnection[]
+  indexingConfigs   IndexingConfig[]
+}
+
+model DbConnection {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  host        String
+  port        Int
+  database    String
+  username    String
+  password    String
+  ssl         Boolean  @default(false)
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model IndexingConfig {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  nftBids         Boolean  @default(false)
+  tokenPrices     Boolean  @default(false)
+  borrowableTokens Boolean @default(false)
+  customAddresses String[]
+  webhookId       String?
+  isActive        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model IndexingLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  eventType   String
+  status      String
+  message     String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+}
