@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { useRouter } from 'next/router';
+import Link from 'next/link';
 import axios from 'axios';
-import { PencilIcon, TrashIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
-import { Switch } from '@headlessui/react';
-import Card from '../ui/Card';
+import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import Button from '../ui/Button';
+import Card from '../ui/Card';
 import Modal from '../ui/Modal';
 
 interface IndexingConfig {
@@ -14,98 +13,86 @@ interface IndexingConfig {
   tokenPrices: boolean;
   borrowableTokens: boolean;
   customAddresses: string[];
+  webhookId: string | null;
   isActive: boolean;
-  webhookId: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 interface ConfigListProps {
   configs: IndexingConfig[];
-  onRefresh: () => void;
+  onDelete?: () => void;
+  onActivate?: () => void;
   loading?: boolean;
 }
 
-export default function ConfigList({ configs, onRefresh, loading = false }: ConfigListProps) {
-  const router = useRouter();
-  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; configId?: number; configName?: string }>({
-    isOpen: false,
-  });
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
+export default function ConfigList({ 
+  configs, 
+  onDelete, 
+  onActivate, 
+  loading = false 
+}: ConfigListProps) {
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [configToDelete, setConfigToDelete] = useState<IndexingConfig | null>(null);
+  const [deletingConfig, setDeletingConfig] = useState(false);
+  const [activatingConfig, setActivatingConfig] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleToggleActive = async (configId: number, isActive: boolean) => {
-    setActionLoading(configId);
-    try {
-      await axios.patch(`/api/indexing/${configId}`, { isActive });
-      onRefresh();
-    } catch (error) {
-      console.error('Error toggling config status:', error);
-    } finally {
-      setActionLoading(null);
-    }
+  const handleDeleteClick = (config: IndexingConfig) => {
+    setConfigToDelete(config);
+    setDeleteConfirmOpen(true);
   };
 
-  const handleEdit = (configId: number) => {
-    router.push(`/dashboard/indexing/edit/${configId}`);
-  };
-
-  const confirmDelete = (configId: number, configName: string) => {
-    setDeleteModal({
-      isOpen: true,
-      configId,
-      configName,
-    });
-  };
-
-  const handleDelete = async () => {
-    if (!deleteModal.configId) return;
+  const handleDeleteConfirm = async () => {
+    if (!configToDelete) return;
     
-    setActionLoading(deleteModal.configId);
+    setDeletingConfig(true);
+    setError(null);
+    
     try {
-      await axios.delete(`/api/indexing/${deleteModal.configId}`);
-      setDeleteModal({ isOpen: false });
-      onRefresh();
+      await axios.delete(`/api/indexing/${configToDelete.id}`);
+      setDeleteConfirmOpen(false);
+      if (onDelete) onDelete();
     } catch (error) {
-      console.error('Error deleting config:', error);
+      if (axios.isAxiosError(error) && error.response?.data?.message) {
+        setError(error.response.data.message);
+      } else {
+        setError('Failed to delete configuration');
+      }
     } finally {
-      setActionLoading(null);
+      setDeletingConfig(false);
     }
   };
 
-  const getEnabledTypes = (config: IndexingConfig) => {
-    const types = [];
-    if (config.nftBids) types.push('NFT Bids');
-    if (config.tokenPrices) types.push('Token Prices');
-    if (config.borrowableTokens) types.push('Borrowable Tokens');
-    if (config.customAddresses.length > 0) types.push(`${config.customAddresses.length} Custom Addresses`);
-    return types.join(', ');
+  const handleActivate = async (configId: number, currentState: boolean) => {
+    setActivatingConfig(configId);
+    setError(null);
+    
+    try {
+      await axios.patch(`/api/indexing/${configId}`, {
+        isActive: !currentState,
+      });
+      if (onActivate) onActivate();
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.data?.message) {
+        setError(error.response.data.message);
+      } else {
+        setError('Failed to update configuration');
+      }
+    } finally {
+      setActivatingConfig(null);
+    }
   };
 
   if (loading) {
     return (
       <Card>
-        <div className="animate-pulse space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-gray-200 rounded"></div>
-          ))}
-        </div>
-      </Card>
-    );
-  }
-
-  if (configs.length === 0) {
-    return (
-      <Card>
-        <div className="text-center py-8">
-          <h3 className="text-lg font-medium text-gray-900">No indexing configurations yet</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Get started by creating your first indexing configuration.
-          </p>
-          <div className="mt-6">
-            <Button
-              onClick={() => router.push('/dashboard/indexing/new')}
-            >
-              Create Configuration
-            </Button>
+        <div className="p-4">
+          <div className="animate-pulse space-y-4">
+            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-10 bg-gray-200 rounded"></div>
+            <div className="h-10 bg-gray-200 rounded"></div>
+            <div className="h-10 bg-gray-200 rounded"></div>
           </div>
         </div>
       </Card>
@@ -115,104 +102,182 @@ export default function ConfigList({ configs, onRefresh, loading = false }: Conf
   return (
     <>
       <Card>
-        <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-          <table className="min-w-full divide-y divide-gray-300">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
-                  Name
-                </th>
-                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                  Data Types
-                </th>
-                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                  Status
-                </th>
-                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                  Created
-                </th>
-                <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {configs.map((config) => (
-                <tr key={config.id}>
-                  <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                    {config.name}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                    {getEnabledTypes(config)}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                    <Switch
-                      checked={config.isActive}
-                      onChange={() => handleToggleActive(config.id, !config.isActive)}
-                      disabled={actionLoading === config.id}
-                      className={`${config.isActive ? 'bg-indigo-600' : 'bg-gray-200'} 
-                        relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent 
-                        transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2`}
-                    >
-                      <span className="sr-only">Toggle active status</span>
-                      <span
-                        className={`${config.isActive ? 'translate-x-5' : 'translate-x-0'}
-                          pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-                      >
-                        {config.isActive && (
-                          <CheckCircleIcon className="absolute inset-0 m-auto h-3 w-3 text-indigo-600" />
-                        )}
-                      </span>
-                    </Switch>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                    {new Date(config.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                    <div className="flex justify-end space-x-2">
-                      <button
-                        onClick={() => handleEdit(config.id)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                        disabled={actionLoading === config.id}
-                      >
-                        <PencilIcon className="h-5 w-5" aria-hidden="true" />
-                        <span className="sr-only">Edit</span>
-                      </button>
-                      <button
-                        onClick={() => confirmDelete(config.id, config.name)}
-                        className="text-red-600 hover:text-red-900"
-                        disabled={actionLoading === config.id}
-                      >
-                        <TrashIcon className="h-5 w-5" aria-hidden="true" />
-                        <span className="sr-only">Delete</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-4 sm:px-6 lg:px-8">
+          <div className="sm:flex sm:items-center">
+            <div className="sm:flex-auto">
+              <h3 className="text-lg font-medium text-gray-900">Indexing Configurations</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Manage your blockchain data indexing configurations
+              </p>
+            </div>
+            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+              <Link href="/dashboard/indexing/new">
+                <Button leftIcon={<PlusIcon className="h-5 w-5" />}>
+                  New Configuration
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          {error && (
+            <div className="mt-4 p-3 text-sm text-white bg-red-500 rounded-md">
+              {error}
+            </div>
+          )}
+          
+          {configs.length === 0 ? (
+            <div className="mt-6 text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1}
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No configurations</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Get started by creating a new indexing configuration.
+              </p>
+              <div className="mt-6">
+                <Link href="/dashboard/indexing/new">
+                  <Button>
+                    <PlusIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
+                    New Configuration
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 flex flex-col">
+              <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6 md:pl-0"
+                        >
+                          Name
+                        </th>
+                        <th
+                          scope="col"
+                          className="py-3.5 px-3 text-left text-sm font-semibold text-gray-900"
+                        >
+                          Data Types
+                        </th>
+                        <th
+                          scope="col"
+                          className="py-3.5 px-3 text-left text-sm font-semibold text-gray-900"
+                        >
+                          Addresses
+                        </th>
+                        <th
+                          scope="col"
+                          className="py-3.5 px-3 text-left text-sm font-semibold text-gray-900"
+                        >
+                          Status
+                        </th>
+                        <th
+                          scope="col"
+                          className="relative py-3.5 pl-3 pr-4 sm:pr-6 md:pr-0"
+                        >
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {configs.map((config) => (
+                        <tr key={config.id}>
+                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6 md:pl-0">
+                            {config.name}
+                          </td>
+                          <td className="whitespace-nowrap py-4 px-3 text-sm text-gray-500">
+                            <div className="space-y-1">
+                              {config.nftBids && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-1">NFT Bids</span>}
+                              {config.tokenPrices && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mr-1">Token Prices</span>}
+                              {config.borrowableTokens && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Borrowable Tokens</span>}
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap py-4 px-3 text-sm text-gray-500">
+                            {config.customAddresses.length > 0 ? `${config.customAddresses.length} addresses` : 'None'}
+                          </td>
+                          <td className="whitespace-nowrap py-4 px-3 text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              config.isActive 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {config.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6 md:pr-0">
+                            <div className="flex space-x-2 justify-end">
+                              <button
+                                onClick={() => handleActivate(config.id, config.isActive)}
+                                disabled={activatingConfig === config.id}
+                                className={`${
+                                  config.isActive 
+                                    ? 'text-red-600 hover:text-red-900' 
+                                    : 'text-green-600 hover:text-green-900'
+                                } disabled:opacity-50`}
+                              >
+                                {activatingConfig === config.id ? 
+                                  'Processing...' : 
+                                  config.isActive ? 'Deactivate' : 'Activate'
+                                }
+                              </button>
+                              <Link
+                                href={`/dashboard/indexing/edit/${config.id}`}
+                                className="text-indigo-600 hover:text-indigo-900"
+                              >
+                                <PencilIcon className="h-5 w-5" />
+                                <span className="sr-only">Edit</span>
+                              </Link>
+                              <button
+                                onClick={() => handleDeleteClick(config)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                <TrashIcon className="h-5 w-5" />
+                                <span className="sr-only">Delete</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
 
-      {/* Delete Confirmation Modal */}
       <Modal
-        isOpen={deleteModal.isOpen}
-        onClose={() => setDeleteModal({ isOpen: false })}
+        isOpen={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
         title="Delete Configuration"
         footer={
-          <div className="flex space-x-2 justify-end">
+          <div className="flex space-x-3 justify-end">
             <Button
               variant="outline"
-              onClick={() => setDeleteModal({ isOpen: false })}
-              disabled={actionLoading === deleteModal.configId}
+              onClick={() => setDeleteConfirmOpen(false)}
+              disabled={deletingConfig}
             >
               Cancel
             </Button>
             <Button
               variant="danger"
-              onClick={handleDelete}
-              isLoading={actionLoading === deleteModal.configId}
+              onClick={handleDeleteConfirm}
+              isLoading={deletingConfig}
             >
               Delete
             </Button>
@@ -220,8 +285,18 @@ export default function ConfigList({ configs, onRefresh, loading = false }: Conf
         }
       >
         <p className="text-sm text-gray-500">
-          Are you sure you want to delete the configuration "{deleteModal.configName}"? This will remove all associated webhooks and stop indexing this data. This action cannot be undone.
+          Are you sure you want to delete the configuration &quot;{configToDelete?.name}&quot;? This action cannot be undone.
         </p>
+        {configToDelete?.isActive && (
+          <p className="mt-2 text-sm text-red-500">
+            Warning: This configuration is currently active. Deleting it will stop data indexing.
+          </p>
+        )}
+        {error && (
+          <div className="mt-3 p-2 text-sm text-white bg-red-500 rounded-md">
+            {error}
+          </div>
+        )}
       </Modal>
     </>
   );

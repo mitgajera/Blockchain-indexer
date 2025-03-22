@@ -26,55 +26,71 @@ ChartJS.register(
 
 interface ActivityData {
   date: string;
-  transactionsProcessed: number;
-  successCount: number;
-  errorCount: number;
+  count: number;
+  type: string;
 }
 
 interface ActivityChartProps {
   data: ActivityData[];
   loading?: boolean;
+  title?: string;
+  height?: number;
 }
 
-export default function ActivityChart({ data, loading = false }: ActivityChartProps) {
+export default function ActivityChart({ 
+  data, 
+  loading = false, 
+  title = 'Event Activity', 
+  height = 300 
+}: ActivityChartProps) {
   const chartData = useMemo(() => {
-    const labels = data.map(d => d.date);
+    // Group data by date and type
+    const groupedData = data.reduce((acc, curr) => {
+      if (!acc[curr.date]) {
+        acc[curr.date] = {};
+      }
+      if (!acc[curr.date][curr.type]) {
+        acc[curr.date][curr.type] = 0;
+      }
+      acc[curr.date][curr.type] += curr.count;
+      return acc;
+    }, {} as Record<string, Record<string, number>>);
+
+    // Get unique types
+    const allTypes = [...new Set(data.map(d => d.type))];
     
+    // Get all dates and sort them
+    const allDates = [...new Set(data.map(d => d.date))].sort();
+
+    // Prepare datasets
+    const datasets = allTypes.map((type, index) => {
+      const colors = [
+        { bg: 'rgba(59, 130, 246, 0.2)', border: 'rgb(59, 130, 246)' },
+        { bg: 'rgba(99, 102, 241, 0.2)', border: 'rgb(99, 102, 241)' },
+        { bg: 'rgba(139, 92, 246, 0.2)', border: 'rgb(139, 92, 246)' },
+        { bg: 'rgba(16, 185, 129, 0.2)', border: 'rgb(16, 185, 129)' },
+      ];
+      
+      const colorIndex = index % colors.length;
+      
+      return {
+        label: type,
+        data: allDates.map(date => groupedData[date]?.[type] || 0),
+        borderColor: colors[colorIndex].border,
+        backgroundColor: colors[colorIndex].bg,
+        tension: 0.3,
+      };
+    });
+
     return {
-      labels,
-      datasets: [
-        {
-          label: 'Total Transactions',
-          data: data.map(d => d.transactionsProcessed),
-          borderColor: 'rgb(99, 102, 241)',
-          backgroundColor: 'rgba(99, 102, 241, 0.5)',
-          tension: 0.4,
-        },
-        {
-          label: 'Successful',
-          data: data.map(d => d.successCount),
-          borderColor: 'rgb(34, 197, 94)',
-          backgroundColor: 'rgba(34, 197, 94, 0.5)',
-          tension: 0.4,
-        },
-        {
-          label: 'Failed',
-          data: data.map(d => d.errorCount),
-          borderColor: 'rgb(239, 68, 68)',
-          backgroundColor: 'rgba(239, 68, 68, 0.5)',
-          tension: 0.4,
-        },
-      ],
+      labels: allDates,
+      datasets,
     };
   }, [data]);
 
   const options: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: {
-      mode: 'index',
-      intersect: false,
-    },
     plugins: {
       legend: {
         position: 'top',
@@ -84,23 +100,47 @@ export default function ActivityChart({ data, loading = false }: ActivityChartPr
       },
     },
     scales: {
+      x: {
+        grid: {
+          display: false,
+        },
+      },
       y: {
         beginAtZero: true,
+        ticks: {
+          precision: 0,
+        },
       },
     },
   };
 
+  if (loading) {
+    return (
+      <Card>
+        <div className="p-4">
+          <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+          <div className="animate-pulse mt-4" style={{ height }}>
+            <div className="bg-gray-200 h-full w-full rounded"></div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   return (
-    <Card title="Activity Over Time" className="h-full">
-      {loading ? (
-        <div className="h-80 w-full bg-gray-100 animate-pulse rounded flex items-center justify-center">
-          <p className="text-gray-500">Loading chart data...</p>
+    <Card>
+      <div className="p-4">
+        <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+        <div style={{ height }}>
+          {data.length > 0 ? (
+            <Line data={chartData} options={options} />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-500">No activity data available</p>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="h-80">
-          <Line data={chartData} options={options} />
-        </div>
-      )}
+      </div>
     </Card>
   );
 }

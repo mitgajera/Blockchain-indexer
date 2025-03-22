@@ -1,9 +1,12 @@
 import { ButtonHTMLAttributes, ReactNode } from 'react';
-import clsx from 'clsx';
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'outline';
-  size?: 'sm' | 'md' | 'lg';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'success' | 'outline';
+export type ButtonSize = 'sm' | 'md' | 'lg';
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  children: ReactNode;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   isLoading?: boolean;
   leftIcon?: ReactNode;
   rightIcon?: ReactNode;
@@ -38,20 +41,12 @@ export default function Button({
     lg: 'px-6 py-3 text-base',
   };
 
+  const disabledStyles = disabled || isLoading ? 'opacity-50 cursor-not-allowed' : '';
   const widthStyles = fullWidth ? 'w-full' : '';
-  
-  const disabledStyles = (disabled || isLoading) ? 'opacity-60 cursor-not-allowed' : '';
 
   return (
     <button
-      className={clsx(
-        baseStyles,
-        variantStyles[variant],
-        sizeStyles[size],
-        widthStyles,
-        disabledStyles,
-        className
-      )}
+      className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${disabledStyles} ${widthStyles} ${className || ''}`}
       disabled={disabled || isLoading}
       {...props}
     >

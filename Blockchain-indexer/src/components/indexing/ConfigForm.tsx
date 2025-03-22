@@ -1,11 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
-import { IndexingConfigForm } from '@/types/indexing';
+import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import DataTypeSelector from './DataTypeSelector';
-import Card from '../ui/Card';
+
+interface IndexingConfigForm {
+  name: string;
+  nftBids: boolean;
+  tokenPrices: boolean;
+  borrowableTokens: boolean;
+  customAddresses: string[];
+  isActive?: boolean;
+}
 
 interface Props {
   onSuccess?: () => void;
@@ -22,6 +30,7 @@ export default function ConfigForm({ onSuccess, initialValues, isEdit, configId 
     tokenPrices: initialValues?.tokenPrices || false,
     borrowableTokens: initialValues?.borrowableTokens || false,
     customAddresses: initialValues?.customAddresses || [],
+    isActive: initialValues?.isActive || false,
   });
   
   const [error, setError] = useState<string | null>(null);
@@ -29,12 +38,18 @@ export default function ConfigForm({ onSuccess, initialValues, isEdit, configId 
   const [addresses, setAddresses] = useState<string[]>(initialValues?.customAddresses || []);
   const [newAddress, setNewAddress] = useState('');
 
-  // Add address to array
+  // Validate Solana address format
+  const isValidSolanaAddress = (address: string): boolean => {
+    return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+  };
+
+  // Add new address to array
   const addAddress = () => {
-    if (!newAddress) return;
+    if (!newAddress.trim()) {
+      return;
+    }
     
-    // Basic validation for Solana addresses
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(newAddress)) {
+    if (!isValidSolanaAddress(newAddress)) {
       setError('Please enter a valid Solana address');
       return;
     }
