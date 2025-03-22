@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { prisma } from '@/lib/prisma';
 import { hashPassword, generateVerificationToken } from '@/lib/auth';
 import { sendVerificationEmail } from '@/lib/email';
-import { prisma } from '@/lib/prisma';
 
 export default async function handler(
   req: NextApiRequest,
@@ -12,11 +12,15 @@ export default async function handler(
   }
 
   try {
-    const { email, password, name } = req.body;
+    const { name, email, password } = req.body;
 
-    // Validate input
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' });
+    // Validate inputs
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters long' });
     }
 
     // Check if user already exists
@@ -25,29 +29,36 @@ export default async function handler(
     });
 
     if (existingUser) {
-      return res.status(400).json({ message: 'User already exists with this email' });
+      return res.status(400).json({ message: 'Email already in use' });
     }
 
-    // Create the new user
+    // Hash password
     const hashedPassword = await hashPassword(password);
+
+    // Generate verification token
     const verificationToken = generateVerificationToken();
-    
+
+    // Create user
     const user = await prisma.user.create({
       data: {
+        name,
         email,
         password: hashedPassword,
-        name,
-        verificationToken,
-        verified: false,
+        isVerified: false,
+        emailVerificationToken: verificationToken,
+        emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
       },
     });
 
     // Send verification email
     await sendVerificationEmail(email, verificationToken);
 
-    res.status(201).json({ message: 'User registered. Please check your email for verification.' });
+    // Return success
+    return res.status(201).json({
+      message: 'User registered successfully. Please check your email to verify your account.',
+    });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Something went wrong' });
+    return res.status(500).json({ message: 'Internal server error' });
   }
 }
