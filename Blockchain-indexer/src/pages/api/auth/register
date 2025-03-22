@@ -1,0 +1,53 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { hashPassword, generateVerificationToken } from '@/lib/auth';
+import { sendVerificationEmail } from '@/lib/email';
+import { prisma } from '@/lib/prisma';
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Method not allowed' });
+  }
+
+  try {
+    const { email, password, name } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists with this email' });
+    }
+
+    // Create the new user
+    const hashedPassword = await hashPassword(password);
+    const verificationToken = generateVerificationToken();
+    
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        name,
+        verificationToken,
+        verified: false,
+      },
+    });
+
+    // Send verification email
+    await sendVerificationEmail(email, verificationToken);
+
+    res.status(201).json({ message: 'User registered. Please check your email for verification.' });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Something went wrong' });
+  }
+}
